@@ -194,8 +194,8 @@ Double buffering and ANSI diffing ensure that the framework only writes the mini
 
 To validate framework completeness, I built a few demo apps:  
 
-- **Snake Game** – Demonstrates dynamic input handling, state updates, and screen re-rendering.  
-  [Insert screenshot/gif: Snake game]
+- **Snake Game** – Demonstrates dynamic input handling, state updates, and screen re-rendering.
+![snake_demo](https://github.com/user-attachments/assets/3cdb67f7-00e5-4211-a79d-56be819d8385)
 
 - **Todo App** – Illustrates form inputs, focus management between components, and state persistence.  
   <img width="343" height="290" alt="image" src="https://github.com/user-attachments/assets/109d6397-312e-4d23-9ec8-fdd35b1a78d6" />
@@ -204,7 +204,79 @@ To validate framework completeness, I built a few demo apps:
 - **Stopwatch** – Highlights real-time updating of components with timed state changes.  
   <img width="344" height="144" alt="image" src="https://github.com/user-attachments/assets/cc481e14-32e7-4bbe-835c-b64abe5ec195" />
 
+## Challenges Faced
 
-These examples serve both as proofs of concept and as guides for developers exploring Pixel Prompt, showing how state, input, and rendering work together in practice.
+Building a TUI framework from scratch in Dart surfaced several challenges, both from the ecosystem’s limitations and from the inherent quirks of terminal programming.  
+
+### Windows Unicode Support
+
+One of the earliest issues was handling Unicode rendering on Windows. While Linux and macOS terminals handle wide characters (like emojis or CJK scripts) consistently, Windows required additional work with [`ffi`](https://pub.dev/packages/ffi) and [`win32`](https://pub.dev/packages/win32) to properly support wide character output. Without this fix, text would appear misaligned or broken.  
+- Related discussion: [Dart SDK issue #48329](https://github.com/dart-lang/sdk/issues/48329)
+
+### Buffer Optimization and Testing
+
+Initially, the framework wrote entire frames directly to stdout, which made testing possible through simple golden snapshots. But once I introduced **double buffering with ANSI diffing**, stdout no longer represented the whole screen—only the changed segments. This broke the golden testing approach, since snapshots couldn’t capture the final terminal state.  
+
+To address this, I implemented a **virtual terminal interpreter**. It replays the ANSI diff stream and reconstructs what the user would actually see, allowing the framework to validate output accurately. This reduced redundant writes drastically (in one test, from ~110 KB to ~20 KB of output) and cut down on flickering.  
+
+### Input Latency
+
+Another persistent issue is input latency at startup. Applications built with the framework sometimes take noticeable time before responding to keyboard input. My current investigation points to how stdin is initialized and consumed in Dart. While the input system works reliably, its startup lag remains a usability concern and will need deeper investigation in future iterations. 
+
+## Limitations  
+
+Even though the framework is already capable of building interactive terminal applications, there are some clear gaps that prevent it from feeling complete. These limitations are partly due to time constraints during GSoC and partly due to the deliberate decision to focus on core primitives first.  
+
+One of the gaps is the lack of **complex components**. While text rendering, checkboxes, and basic input fields work well, larger interactive elements such as a `TextArea` for multiline editing or `Table` components for structured data are not yet implemented. These require both more sophisticated layout logic and careful handling of cursor movement, which remain open tasks.  
+
+The **layout engine** is also a limitation of Pixel Prompt. While it does support positioning through `PositionType.absolute` and `PositionType.relative`, it currently lacks the robustness of a flex-like system. Building nested layout logic is inherently complex, and attempting to mimic or reuse another framework’s engine (like Flutter’s) would have meant a complete rewrite of Pixel Prompt’s architecture. Due to time constraints, this was not feasible, but developing a dedicated and verbose layout system is a clear goal for the future.  
+
+Another limitation is the absence of a dedicated **animation system**. At the moment, animations can only be hacked together by repeatedly triggering `setState` and simulating frame-by-frame updates. While functional, this approach is neither ergonomic nor efficient. A proper animation API would allow developers to declaratively specify transitions or timed effects, making the framework feel more complete.  
+
+Finally, there is no **visual debugger**. Developers currently have no way to introspect the component tree or see how layout decisions are made at runtime. A tool similar to Chrome DevTools or the [Clay](https://github.com/nicbarker/clay) C UI library—where a developer could press a key combination to reveal the component hierarchy and inspect properties—would make debugging and learning the framework far easier.  
+
+**In summary, the current limitations are:**  
+
+- Missing complex components (`TextArea`, `Tables`)  
+- Lack of a flex-like layout system  
+- No dedicated animation API (only manual frame updates)  
+- No visual debugger for inspecting component trees  
+
+
+## Future Work  
+
+Looking ahead, there are several areas where Pixel Prompt can grow into a more complete framework. Many of these directions are natural extensions of the limitations discussed above.  
+
+The most immediate need is a proper **animation API**. Instead of developers manually calling `setState` to fake animations, the framework should expose a dedicated system for timed transitions, tweens, and frame-based effects. This would make it much easier to create smooth loading indicators, dynamic UI transitions, or even simple games.  
+
+Another significant step would be building a **visual debugger**. Much like Flutter’s DevTools or the Clay C UI library, the idea would be to let developers toggle an inspector view that displays the component hierarchy and layout details in real time. This would dramatically improve the debugging experience and lower the entry barrier for contributors trying to understand the internals.  
+
+Expanding the **component library** is also a key priority. Implementing more advanced widgets such as `TextArea`, `Table`, `ListView`, and flexible layout managers would make Pixel Prompt usable for more realistic applications. This ties closely to the eventual goal of introducing a **robust layout system**. A flex-like or grid-based layout engine would give developers fine-grained control over positioning and nesting, without forcing them to micromanage bounds manually.  
+
+Beyond technical features, the project will also benefit from clearer **contributor guidelines** and documentation. While the code is modular and tested, lowering the barrier to entry for new contributors is essential if Pixel Prompt is to evolve beyond a single-person effort. 
+
+## Links  
+
+- **Repository**  
+  - [Pixel Prompt on GitHub](https://github.com/primequantuM4/pixel_prompt)
+  - [Pixel Prompt on pub.dev](https://pub.dev/packages/pixel_prompt)
+
+- **Example Applications**  
+  - [Snake Game Demo](https://github.com/primequantuM4/pixel_prompt/blob/main/example/snake/snake_game.dart)  
+  - [Todo App Demo](https://github.com/primequantuM4/pixel_prompt/blob/main/example/stateful_component_demo/bin/todo_demo.dart)  
+  - [Stopwatch Demo](https://github.com/primequantuM4/pixel_prompt/blob/main/example/buildable_component_demo/bin/stop_watch_demo.dart)  
+
+- **Relevant Dart/Flutter Resources**  
+  - [Dart SDK issue #48329: Windows Unicode support](https://github.com/dart-lang/sdk/issues/48329)  
+  - [ffi package](https://pub.dev/packages/ffi)  
+  - [win32 package](https://pub.dev/packages/win32)  
+
+- **Inspiration / References**  
+  - [Clay (C UI Library)](https://github.com/nicbarker/clay)
+  - [Flutter docs](https://api.flutter.dev)  
+  - [Bubble Tea (Go TUI framework)](https://github.com/charmbracelet/bubbletea)  
+  - [ratatui (Rust TUI framework)](https://github.com/ratatui-org/ratatui)  
+  - [Textual (Python TUI framework)](https://github.com/Textualize/textual)  
+
 
 
