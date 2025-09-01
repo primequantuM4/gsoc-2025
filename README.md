@@ -15,7 +15,7 @@ Providing a Dart-native TUI framework fills this gap. It:
 - **Supports productivity** by letting teams reuse patterns they already know from Flutter, like declarative UI and state management.  
 - **Expands Dart’s reach** into a new domain (CLI/TUI tooling), making it more appealing as a general-purpose language rather than being perceived as “just for Flutter GUIs.”  
 
-The framework I built, **Pixel Prompt**, is designed to feel natural for any developer already comfortable with Flutter, but also approachable for newcomers. It lowers the barrier to writing interactive terminal apps in Dart, strengthens the language’s ecosystem, and tries to make Dart more competitive with languages that already have strong TUI support. 
+The framework we built, **Pixel Prompt**, is designed to feel natural for any developer already comfortable with Flutter, but also approachable for newcomers. It lowers the barrier to writing interactive terminal apps in Dart, strengthens the language’s ecosystem, and tries to make Dart more competitive with languages that already have strong TUI support. 
 
 # Background
 
@@ -66,7 +66,7 @@ class Counter extends Component {
 class _CounterInstance extends ComponentInstance<Counter> {
   @override
   void render(CanvasBuffer buffer, Rect bounds) {
-    buffer.writeText(0, 0, "Count: ${component.count}");
+    buffer.drawAt(0, 0, "Count: ${component.count}", TextComponentStyle());
   }
   // ... other override elements like fitWidth(), fithHeight()...
 }
@@ -215,25 +215,26 @@ One of the earliest issues was handling Unicode rendering on Windows. While Linu
 
 ### Buffer Optimization and Testing
 
-Initially, the framework wrote entire frames directly to stdout, which made testing possible through simple golden snapshots. But once I introduced **double buffering with ANSI diffing**, stdout no longer represented the whole screen—only the changed segments. This broke the golden testing approach, since snapshots couldn’t capture the final terminal state.  
+We wanted reliable golden tests to ensure rendering correctness.  
+However, with **double buffering and ANSI diffing**, stdout only contained incremental updates (diffs) rather than full frames. This made traditional snapshot testing ineffective, since snapshots alone could not reconstruct the final screen state.
 
-To address this, I implemented a **virtual terminal interpreter**. It replays the ANSI diff stream and reconstructs what the user would actually see, allowing the framework to validate output accurately. This reduced redundant writes drastically (in one test, from ~110 KB to ~20 KB of output) and cut down on flickering.  
+To solve this, we built our very own **custom virtual terminal interpreter**! that replays the diffs to rebuild the full screen. Golden tests then compare the reconstructed terminal state against the expected output, ensuring both correctness and performance remain verifiable.
 
 ### Input Latency
+Another persistent issue is input latency at startup. Applications built with the framework sometimes take noticeable time before responding to keyboard input. My current investigation points to how stdin is initialized and consumed in Dart.  
 
-Another persistent issue is input latency at startup. Applications built with the framework sometimes take noticeable time before responding to keyboard input. My current investigation points to how stdin is initialized and consumed in Dart. While the input system works reliably, its startup lag remains a usability concern and will need deeper investigation in future iterations. 
+Interestingly, when compiling applications with `dart compile`, the startup lag was virtually eliminated. This indicates that the latency is more a characteristic of running in the Dart VM rather than a limitation of the framework itself. While the input system works reliably in both modes, improving responsiveness in VM execution remains an open area for future exploration. ([Issue#44](https://github.com/primequantuM4/pixel_prompt/issues/44))
 
 ## Limitations  
+Pixel Prompt already enables building interactive terminal applications, but with only three months for GSoC, there were many ideas and improvements that could not be implemented. The framework focuses on core primitives, leaving several clear areas for future development. All of these have corresponding GitHub issues so that contributors can pick them up.
 
-Even though the framework is already capable of building interactive terminal applications, there are some clear gaps that prevent it from feeling complete. These limitations are partly due to time constraints during GSoC and partly due to the deliberate decision to focus on core primitives first.  
+One area that remains under development is support for **complex components**. While text rendering, checkboxes, and basic input fields are fully functional, larger interactive elements such as a `TextArea` for multiline editing or `Table` components for structured data are not yet implemented. These components require more sophisticated layout logic and careful handling of cursor movement. ([Issue#41](https://github.com/primequantuM4/pixel_prompt/issues/41))
 
-One of the gaps is the lack of **complex components**. While text rendering, checkboxes, and basic input fields work well, larger interactive elements such as a `TextArea` for multiline editing or `Table` components for structured data are not yet implemented. These require both more sophisticated layout logic and careful handling of cursor movement, which remain open tasks.  
+The **layout engine** currently supports `PositionType.absolute` and `PositionType.relative`, but does not yet provide a full flex-like system capable of robust nested layouts. Creating such a system would require a significant expansion of the framework’s architecture. ([Issue#34](https://github.com/primequantuM4/pixel_prompt/issues/34))
 
-The **layout engine** is also a limitation of Pixel Prompt. While it does support positioning through `PositionType.absolute` and `PositionType.relative`, it currently lacks the robustness of a flex-like system. Building nested layout logic is inherently complex, and attempting to mimic or reuse another framework’s engine (like Flutter’s) would have meant a complete rewrite of Pixel Prompt’s architecture. Due to time constraints, this was not feasible, but developing a dedicated and verbose layout system is a clear goal for the future.  
+A dedicated **animation system** is also missing. At present, animations are simulated by repeatedly triggering `setState`, which works but is neither efficient nor ergonomic. Implementing a declarative animation API would allow developers to specify timed transitions and effects more naturally. ([Issue#42](https://github.com/primequantuM4/pixel_prompt/issues/42))
 
-Another limitation is the absence of a dedicated **animation system**. At the moment, animations can only be hacked together by repeatedly triggering `setState` and simulating frame-by-frame updates. While functional, this approach is neither ergonomic nor efficient. A proper animation API would allow developers to declaratively specify transitions or timed effects, making the framework feel more complete.  
-
-Finally, there is no **visual debugger**. Developers currently have no way to introspect the component tree or see how layout decisions are made at runtime. A tool similar to Chrome DevTools or the [Clay](https://github.com/nicbarker/clay) C UI library—where a developer could press a key combination to reveal the component hierarchy and inspect properties—would make debugging and learning the framework far easier.  
+Finally, there is no **visual debugger**. Developers currently cannot inspect the component tree or view layout decisions at runtime, which makes debugging more challenging. A tool similar to Chrome DevTools or the [Clay](https://github.com/nicbarker/clay) C UI library would allow developers to inspect component hierarchies and properties in real time. ([Issue#43](https://github.com/primequantuM4/pixel_prompt/issues/43))
 
 **In summary, the current limitations are:**  
 
