@@ -1,4 +1,4 @@
-# gsoc-2025
+# Dart Terminal UI (TUI) framework 
 # Introduction
 
 This project took place as part of **Google Summer of Code (GSoC) 2025** with the Dart organization.  
